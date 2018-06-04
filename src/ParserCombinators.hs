@@ -15,7 +15,8 @@ import Data.Char (isDigit)
 import Convenience
 
 
-divideUsualStrings = parseAll (sepBy delimiter)
+divideUsualStrings :: String -> Either String [String]
+divideUsualStrings = parseAll (sepBy delimiter) &.> filter (not.null)
 
 delimiter :: Parser String ()
 delimiter = spaces *> regularDelimiters <* many' (space <|> newLine)

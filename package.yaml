@@ -35,6 +35,7 @@ dependencies:
 - filepath
 - foundation
 - fsnotify
+- fuzzyset
 
 library:
   source-dirs: src
@@ -46,6 +47,7 @@ executables:
     ghc-options:
     - -threaded
     - -rtsopts
+    - -O2
     - -with-rtsopts=-N
     dependencies:
     - sarah

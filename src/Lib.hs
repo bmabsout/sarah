@@ -12,6 +12,7 @@ module Lib
     ( module Lib
     ) where
 
+import qualified Data.Set as S
 import Data.Semigroup
 import Foundation as F hiding ((<>))
 import Foundation.String
@@ -19,6 +20,11 @@ import Foundation.Parser as P
 import Data.Char (isDigit)
 import Convenience
 import ParserCombinators
+import Data.Traversable
+import Control.Monad
+import qualified Data.Text as T
+import FeaturesHandler
+import qualified Data.FuzzySet as F
 
 data Location = Coords {lon:: (String,String) , lat :: (String,String), address :: String}
               | Address String
@@ -70,12 +76,12 @@ data Row = Row
 
 data Error = ParseError String | NotARow deriving (Show,Eq)
 
-toRows :: [[String]] -> [Either Row Error]
-toRows = fmap toRow
+toRows :: (Tags,Features) -> [[String]] -> [Either Row Error]
+toRows tf = fmap (toRow tf)
 
-toRow :: [String] -> Either Row Error
-toRow [] = Right NotARow
-toRow row@(firstCol:_)
+toRow :: (Tags,Features) -> [String] -> Either Row Error
+toRow _ [] = Right NotARow
+toRow tf row@(firstCol:_)
     | firstCol == "" || lower firstCol == "sub category" = Right NotARow
     | otherwise =
         let eitherFier :: Either (String,String) Row -> Either Row Error
@@ -83,7 +89,7 @@ toRow row@(firstCol:_)
             eitherFier (Right r) = Left r
 
             clean s = replace "_x000D_" "\n" s & trim
-        in row & fixRowLength &> clean & parseRow & eitherFier
+        in row & fixRowLength &> clean & parseRow tf & eitherFier
 
 fixRowLength :: [String] -> [String]
 fixRowLength l
@@ -175,9 +181,31 @@ parsePhoneNumber = do
     where numDigits from to = repeat (Between $ from `And` to) digit &> fromList
 
 
+parseFromSet :: F.FuzzySet -> String -> Either String [String]
+parseFromSet set s =
+    divideUsualStrings s
+    &>> (\matchWith -> fuzzyDecider (F.get set (stringToText matchWith)) matchWith)
+    &> sequenceA
+    & join
+  where
+        fuzzyDecider _ "" = Left "there's an empty word"
+        fuzzyDecider [] m = Left "text file is empty"
+        fuzzyDecider ((score,deTextMe):_) matchWith
+            | score >= 0.7 = Right closestMatch
+            | otherwise   = Left $ "couldn't find '"
+                                   <> matchWith
+                                   <> "' closest I have is "
+                                   <> "' " <> closestMatch
+                                   <> "' with score: " <> show score
+          where closestMatch = deTextMe & T.unpack & fromList
 
-parseRow :: [String] -> Either (String,String) Row
-parseRow
+        stringToText :: String -> T.Text
+        stringToText = toList &. T.pack
+
+
+
+parseRow :: (Tags,Features) -> [String] -> Either (String,String) Row
+parseRow (Tags tags, Features features)
     [ subCategories
     , name
     , location
@@ -197,7 +225,7 @@ parseRow
     ]
     =
         Row
-        <$> (divideUsualStrings (lower subCategories) & addCaption "subCategories")
+        <$> (parseFromSet tags (upper subCategories) & addCaption "subCategories")
         <*> (asIs name & addCaption "name")
         <*> (parseLocation location & addCaption "location")
         <*> (asIs description & addCaption "description")
@@ -209,10 +237,10 @@ parseRow
         <*> (divideUsual parsePhoneNumber (lower phoneNumbers) & addCaption ("phoneNumbers: " <> phoneNumbers))
         <*> (divideUsualStrings (lower emails) & addCaption "emails")
         <*> (parseWebsites (lower websites) & addCaption "websites")
-        <*> (divideUsualStrings (lower facilities) & addCaption "facilities")
+        <*> (parseFromSet features (upper facilities) & addCaption "facilities")
         <*> (parseBool (lower photos) & addCaption "photos")
         <*> (asIs academicNotes & addCaption "academicNotes")
-        <*> (divideUsualStrings (lower additionalNotes) & addCaption "additionalNotes")
+        <*> (parseFromSet tags (upper additionalNotes) & addCaption "additionalNotes")
     where addCaption s = first (\e -> (e,s))
 
 example :: [String]

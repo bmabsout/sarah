@@ -5,6 +5,8 @@
 module Main where
 
 import Lib
+import Convenience
+import FeaturesHandler
 
 
 import qualified Data.ByteString.Lazy as L
@@ -24,10 +26,10 @@ import Foundation.String (toBytes, Encoding (UTF8))
 import Data.Either
 import qualified Foundation.VFS.FilePath as FP
 import System.FilePath (FilePath, takeExtension)
-import Convenience
 import System.FSNotify
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
+
 
 main =
   withManager $ \mgr -> do
@@ -57,25 +59,27 @@ for = flip fmap
 loadXlsx :: FilePath -> IO ()
 loadXlsx fp = do
   clearScreen
-  bs     <- L.readFile fp
-  input  <- getWorksheets $ toXlsx bs
+  bs       <- L.readFile fp
+  input    <- getWorksheets $ toXlsx bs
+  tags     <- readSet "tags.txt"
+  features <- readSet "features.txt"
   forM_ input $ \(worksheetTitle, worksheetContent) ->
     case getXlsxValues $ worksheetValues worksheetContent of
       Nothing -> putStrLn "Skipping invalid worksheet.."
-      Just ws -> printParseErrors ws worksheetTitle
+      Just ws -> printParseErrors (Tags tags, Features features) ws worksheetTitle
 
 toStringParseError (line,x) = show line <> ": " <> final x
     where final (Left x) = show x
           final (Right (ParseError x)) = "Error: " <> x
           final (Right (NotARow)) = "Error: something's wrong with the row"
 
-printParseErrors :: [[Maybe Cell]] -> Text -> IO ()
-printParseErrors cells title = do
+printParseErrors :: (Tags,Features) -> [[Maybe Cell]] -> Text -> IO ()
+printParseErrors tf cells title = do
     let fileTitle = unpack title
     let output = cells & cellToCellValue & parseCellValue :: [[String]]
     putStrLn (fileTitle & fromList)
     -- print (output & nonEmpty &> head :: Maybe [String])
-    Lib.toRows output
+    Lib.toRows tf output
       & zip [1..] & firstError & Prelude.mapM_ (toStringParseError &. putStrLn)
   where
     allPhones :: [(Int,Either Row Error)] -> [(Int, Either [String] Error)]
