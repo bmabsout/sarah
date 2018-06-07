@@ -7,6 +7,7 @@ module Main where
 import Lib
 import Convenience
 import FeaturesHandler
+import Exported
 
 
 import qualified Data.ByteString.Lazy as L
@@ -15,9 +16,8 @@ import Control.Monad (forM_)
 import Data.Function ((&))
 import Data.Text (Text,unpack)
 import Data.Map.Lazy (keys,lookup)
-import qualified Prelude as Prelude
+import qualified Prelude as P
 import System.Console.ANSI(clearScreen)
-
 import Codec.Xlsx
 import Foundation
 import Foundation.Collection (zip)
@@ -25,7 +25,7 @@ import Foundation.IO (hPut, withFile, IOMode(WriteMode),putStrLn)
 import Foundation.String (toBytes, Encoding (UTF8))
 import Data.Either
 import qualified Foundation.VFS.FilePath as FP
-import System.FilePath (FilePath, takeExtension)
+import System.FilePath (FilePath, takeExtension, takeFileName)
 import System.FSNotify
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
@@ -38,15 +38,10 @@ main =
       mgr          -- manager
       "."          -- directory to watch
       (\case
-           Added path _ -> takeExtension path == ".xlsx"
-           Modified path _ -> takeExtension path == ".xlsx"
-           otherwise -> False
+            Added p _ -> takeExtension p == ".xlsx" && (takeFileName p & isPrefixOf "~$" & not)
+            otherwise -> False
       ) -- predicate
-      (\case
-           Added path _ -> loadXlsx path
-           Modified path _ -> loadXlsx path
-           otherwise -> mempty
-       )        -- action
+      (eventPath &. loadXlsx)        -- action
 
     -- sleep forever (until interrupted)
     forever $ threadDelay 1000000
@@ -68,19 +63,21 @@ loadXlsx fp = do
       Nothing -> putStrLn "Skipping invalid worksheet.."
       Just ws -> printParseErrors (Tags tags, Features features) ws worksheetTitle
 
-toStringParseError (line,x) = show line <> ": " <> final x
-    where final (Left x) = show x
-          final (Right (ParseError x)) = "Error: " <> x
+toStringParseError :: String -> (Int, Either Row Error) -> String
+toStringParseError category (line,row) = show line <> ": " <> final row
+    where final (Left row) = export category row & show
+          final (Right (ParseError err)) = "Error: " <> err
           final (Right (NotARow)) = "Error: something's wrong with the row"
 
 printParseErrors :: (Tags,Features) -> [[Maybe Cell]] -> Text -> IO ()
 printParseErrors tf cells title = do
-    let fileTitle = unpack title
+    let fileTitle = unpack title & fromList
     let output = cells & cellToCellValue & parseCellValue :: [[String]]
-    putStrLn (fileTitle & fromList)
+    putStrLn fileTitle
     -- print (output & nonEmpty &> head :: Maybe [String])
     Lib.toRows tf output
-      & zip [1..] & firstError & Prelude.mapM_ (toStringParseError &. putStrLn)
+      & filter (isLeft)
+      & zip [1..] & P.take 2 & P.mapM_ (toStringParseError fileTitle &. putStrLn)
   where
     allPhones :: [(Int,Either Row Error)] -> [(Int, Either [String] Error)]
     allPhones l = l & filter (snd &. isLeft)
@@ -112,7 +109,7 @@ commaSeparator = fmap (intercalate ",")
 
 showCells :: CellValue -> String
 showCells (CellText text) = fromString $ unpack text
-showCells (CellDouble double) = show (Prelude.round double)
+showCells (CellDouble double) = show (P.round double)
 showCells (CellBool bool) = show bool
 showCells (CellRich richTextRun) = show richTextRun
 

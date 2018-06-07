@@ -12,7 +12,6 @@ module Lib
     ( module Lib
     ) where
 
-import qualified Data.Set as S
 import Data.Semigroup
 import Foundation as F hiding ((<>))
 import Foundation.String
@@ -41,6 +40,12 @@ data Day = Monday
 
 data AmPm = Am | Pm deriving (Show, Eq)
 data Time = Time {hour :: Natural, minute :: Natural, ampm :: AmPm} deriving (Show, Eq)
+timeToString :: Time -> String
+timeToString (Time hour minute ampm) = pad (show hour) <> ":" <> pad (show minute) <> " " <> lower (show ampm)
+    where pad s
+            | length s == 0 = "00"
+            | length s == 1 = "0" <> s
+            | otherwise     = s
 data RangeDayAndTime = RangeDayAndTime (Either Day (Range Day)) (Range Time) deriving (Show,Eq)
 data PhoneNumber = PhoneNumber {countryCode :: String, areaCode :: String, number :: String, extension :: Maybe String} deriving (Show,Eq)
 data Url = Url {subnet :: String, urlAddress :: String, rest :: String} deriving (Show,Eq)
@@ -174,7 +179,11 @@ parsePhoneNumber = do
             repeat (Exactly all) (spaces *> digit)
             &> fromList
             &> splitAt (CountOf locationSize)
-    (locC,numC) <- getLocationCode 8 2 <|> getLocationCode 7 1
+    (locC,numC) <- let normalLocation = getLocationCode 8 2 <|> getLocationCode 7 1
+                   in (if countryC == "961"
+                       then normalLocation
+                       else getLocationCode 9 2 <|> normalLocation
+                      )
     ext <- (Just <$> (some' space <* elements "ext" <* some' space *> some digit &> fromList))
            <|> pure Nothing
     return $ PhoneNumber countryC locC numC ext

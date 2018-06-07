@@ -1,9 +1,9 @@
 name:                sarah
 version:             0.1.0.0
-github:              "githubuser/sarah"
+github:              "bmabsout/excelator"
 license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
+author:              "Bassel Mabsout"
+maintainer:          "bmabsout@hotmail.com"
 copyright:           "2018 Author name here"
 
 extra-source-files:
@@ -48,17 +48,6 @@ executables:
     - -threaded
     - -rtsopts
     - -O2
-    - -with-rtsopts=-N
-    dependencies:
-    - sarah
-
-tests:
-  sarah-test:
-    main:                Spec.hs
-    source-dirs:         test
-    ghc-options:
-    - -threaded
-    - -rtsopts
     - -with-rtsopts=-N
     dependencies:
     - sarah

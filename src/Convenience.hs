@@ -15,6 +15,9 @@ infixl 3 &.>
 (&.>) :: Functor f => (a -> f b) -> (b -> c) -> a -> f c
 (&.>) g f = (fmap f).g
 
+allVals :: (Bounded a,Enum a) => [a]
+allVals = [minBound .. maxBound]
+
 infixl 1 &>
 (&>) :: Functor f => f a -> (a -> b) -> f b
 (&>) = flip (<$>)

@@ -81,13 +81,13 @@ showError (Satisfy Nothing)        = "Satisfy"
 showError (Satisfy (Just s))       = "Satisfy: " <> s
 
 parseAll :: Parser String a -> String -> Either String a
-parseAll p s = parse p s & toError & first showError
+parseAll p s = parse p s & toError
   where
-    toError :: Result String a -> Either (ParseError String) a
-    toError (ParseFailed err) = Left err
+    toError :: Result String a -> Either String a
+    toError (ParseFailed err) = Left (showError err <> " in: " <> s)
     toError (ParseOk more ok)
         | more == "" = Right ok
-        | otherwise  = Left $ Satisfy $ Just ("There's extra stuff: " <> more)
+        | otherwise  = Left $ ("There's extra stuff: " <> more)
     toError (ParseMore m) = toError (m mempty)
 
 parseError s = reportError $ Satisfy (Just s)
