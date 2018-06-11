@@ -1,27 +1,24 @@
-HIGH CHAIR
-TOILETS
-POOL
-CHANGING TABLES
-CHANGING TABLE
-KITCHEN
-JACCUZI
-NURSING ROOM
-SNACK/FOOD
-SHOWERS
-LOCKERS
-INDOOR PLAYGROUND
-FOOD COURT
-PLAY AREA
-OUTDOOR PLAY GROUND
-OUTDOOR PLAYGROUND
-TUTORING SERVICES
-OUTDOOR PLAYGROUND
-HAIRDRYER
-KIDS MENU
-ACTIVITY AREA
-PERSONAL TRAINER
-WIFI
-FOOD CORNER
-BUS SERVICE
-SNACK
-camps
+High Chair
+Toilets
+Pool
+Changing Table
+Kitchen
+Jaccuzi
+Nursing Room
+Snack & Food
+Showers
+Lockers
+Indoor Playground
+Food Court
+Play Area
+Outdoor Playground
+Tutoring Services
+Hairdryer
+Kids Menu
+Activity Area
+Personal Trainer
+Wifi
+Food Corner
+Bus Service
+Snack
+Camps

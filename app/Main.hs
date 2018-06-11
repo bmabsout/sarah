@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Main where
 
@@ -12,7 +13,7 @@ import Exported
 
 import qualified Data.ByteString.Lazy as L
 import Data.Maybe (fromMaybe)
-import Control.Monad (forM_)
+import Control.Monad (forever, join)
 import Data.Function ((&))
 import Data.Text (Text,unpack)
 import Data.Map.Lazy (keys,lookup)
@@ -20,15 +21,14 @@ import qualified Prelude as P
 import System.Console.ANSI(clearScreen)
 import Codec.Xlsx
 import Foundation
+import qualified Foundation.Format.CSV as CSV
 import Foundation.Collection (zip)
 import Foundation.IO (hPut, withFile, IOMode(WriteMode),putStrLn)
-import Foundation.String (toBytes, Encoding (UTF8))
-import Data.Either
-import qualified Foundation.VFS.FilePath as FP
-import System.FilePath (FilePath, takeExtension, takeFileName)
+import System.FilePath (FilePath, takeExtension, takeFileName, replaceExtension)
 import System.FSNotify
 import Control.Concurrent (threadDelay)
-import Control.Monad (forever)
+import Basement.Block.Builder
+import Basement.From
 
 
 main =
@@ -44,7 +44,7 @@ main =
       (eventPath &. loadXlsx)        -- action
 
     -- sleep forever (until interrupted)
-    forever $ threadDelay 1000000
+    forever $ threadDelay 10000000
 
 print :: Show a => a -> IO ()
 print = show &. putStrLn
@@ -58,63 +58,76 @@ loadXlsx fp = do
   input    <- getWorksheets $ toXlsx bs
   tags     <- readSet "tags.txt"
   features <- readSet "features.txt"
-  forM_ input $ \(worksheetTitle, worksheetContent) ->
-    case getXlsxValues $ worksheetValues worksheetContent of
-      Nothing -> putStrLn "Skipping invalid worksheet.."
-      Just ws -> printParseErrors (Tags tags, Features features) ws worksheetTitle
+  let csvName = replaceExtension fp "csv"
+  input
+    &> (\(worksheetTitle, worksheetContent) ->
+            case getXlsxValues $ worksheetValues worksheetContent of
+              Nothing -> Left "Skipping invalid worksheet.."
+              Just ws -> handleParseErrors (Tags tags, Features features) ws worksheetTitle
+       )
+    & P.sequence & second P.concat
+    & either putStrLn (writeCsv csvName)
 
-toStringParseError :: String -> (Int, Either Row Error) -> String
-toStringParseError category (line,row) = show line <> ": " <> final row
-    where final (Left row) = export category row & show
-          final (Right (ParseError err)) = "Error: " <> err
-          final (Right (NotARow)) = "Error: something's wrong with the row"
 
-printParseErrors :: (Tags,Features) -> [[Maybe Cell]] -> Text -> IO ()
-printParseErrors tf cells title = do
-    let fileTitle = unpack title & fromList
-    let output = cells & cellToCellValue & parseCellValue :: [[String]]
-    putStrLn fileTitle
-    -- print (output & nonEmpty &> head :: Maybe [String])
+
+handleParseErrors :: (Tags,Features) -> [[Maybe Cell]] -> Text -> Either String [[String]]
+handleParseErrors tf cells title =
     Lib.toRows tf output
-      & filter (isLeft)
-      & zip [1..] & P.take 2 & P.mapM_ (toStringParseError fileTitle &. putStrLn)
-  where
-    allPhones :: [(Int,Either Row Error)] -> [(Int, Either [String] Error)]
-    allPhones l = l & filter (snd &. isLeft)
-                    &> second (first (phoneNumbers &.> phoneToString))
+      & zip [1..]
+      & filter (\(i,r) -> not $ notARow r)
+      & eatEither
 
-    firstError :: [(Int,Either Row Error)] -> Maybe (Int, Either Row Error)
-    firstError =
-        find (\(i,r) ->
-                  case r of
-                    Right (ParseError err) -> True
-                    otherwise -> False
-             )
-writeCsv :: [[Maybe Cell]] -> Text -> IO ()
-writeCsv cells title = do
-  let fileTitle = unpack title
-  let output    = cells & cellToCellValue & parseCellValue & commaSeparator & unlineString
-  withFile (fromString (fileTitle <> ".csv") :: FP.FilePath) WriteMode $ \handle -> hPut handle (toBytes UTF8 output)
+  where
+    notARow (Left NotARow) = True
+    notARow _ = False
+
+    fileTitle = unpack title & fromList
+    output = cells & cellToCellValue & parseCellValue
+
+    eatEither :: [(Int,Either Error Row)] -> Either String [[String]]
+    eatEither l =
+      l &> (\(i, eit) -> eit & bimap (toStringParseError i) (export fileTitle))
+        & P.sequence
+
+    toStringParseError :: Int -> Error -> String
+    toStringParseError line parseErr = "Category: " <> fileTitle <> "\n"
+                                       <> show line <> ": " <> final parseErr
+        where final (ParseError err) = "Error: " <> err
+              final (NotARow) = "Error: something's wrong with the row"
+
+
+
+writeCsv :: LString -> [[String]] -> IO ()
+writeCsv path cells = do
+  putStrLn ("writing to " <> fromList path)
+  (titles:cells)
+    &>> CSV.toField
+    &> fromList
+    & fromList
+    & CSV.csvBlockBuilder
+    & run
+    &> from
+    &> (\fileData -> withFile (path & fromString) WriteMode (flip hPut fileData))
+    & join
+  putStrLn "done!"
+  where
+    titles = ["Title", "Content", "Categories", "Features", "Tags", "Location", "Ages", "lp_listingpro_options"]
+
+
 
 cellToCellValue :: [[Maybe Cell]] -> [[CellValue]]
 cellToCellValue cells = fmap (fmap (fromMaybe (CellText ""))) (cellToValues cells)
 
--- cellToString :: [[Maybe Cell]] -> [[String]]
 
 parseCellValue :: [[CellValue]] -> [[String]]
 parseCellValue cellVal = fmap (drop 1) $ drop 1 $ fmap (fmap (showCells)) cellVal
-
-commaSeparator :: [[String]] -> [String]
-commaSeparator = fmap (intercalate ",")
 
 showCells :: CellValue -> String
 showCells (CellText text) = fromString $ unpack text
 showCells (CellDouble double) = show (P.round double)
 showCells (CellBool bool) = show bool
-showCells (CellRich richTextRun) = show richTextRun
+showCells (CellRich richTextRun) = richTextRun &> _richTextRunText & mconcat & unpack & fromString
 
-unlineString :: [String] -> String
-unlineString = intercalate "\n"
 
 getWorksheets :: Xlsx -> IO [(Text, Worksheet)]
 getWorksheets xlsx = return $ (_xlSheets xlsx)
@@ -139,6 +152,5 @@ getXlsxValues cm = do
 cellToValues :: [[Maybe Cell]] -> [[Maybe CellValue]]
 cellToValues = fmap (fmap (>>= _cellValue))
 
-drain = loadXlsx "new.xlsx"
 
 

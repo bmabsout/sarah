@@ -33,6 +33,9 @@ if' :: a -> a -> Bool -> a
 if' x _ True  = x
 if' _ y False = y
 
+iff :: a -> (a -> Bool) -> a -> a
+iff x booler otherwise = if booler x then otherwise else x
+
 sortAndNub :: (Ord a) => [a] -> [a]
 sortAndNub = go S.empty
   where go _ [] = []

@@ -16,7 +16,7 @@ import Data.Semigroup
 import Foundation as F hiding ((<>))
 import Foundation.String
 import Foundation.Parser as P
-import Data.Char (isDigit)
+import Data.Char (isDigit, isAscii, isAlphaNum)
 import Convenience
 import ParserCombinators
 import Data.Traversable
@@ -25,9 +25,21 @@ import qualified Data.Text as T
 import FeaturesHandler
 import qualified Data.FuzzySet as F
 
-data Location = Coords {lon:: (String,String) , lat :: (String,String), address :: String}
+data Location = Coords (Natural,Natural) (Natural,Natural) String
               | Address String
               deriving (Show, Eq)
+
+address (Coords _ _ a) = a
+address (Address a) = a
+
+showCoord (a,b) = show a <> "." <> show b
+
+lat (Coords l _ _) = showCoord l
+lat (Address _) = ""
+
+lon (Coords _ l _) = showCoord l
+lon (Address _) = ""
+
 
 data Day = Monday
          | Tuesday
@@ -81,20 +93,16 @@ data Row = Row
 
 data Error = ParseError String | NotARow deriving (Show,Eq)
 
-toRows :: (Tags,Features) -> [[String]] -> [Either Row Error]
+toRows :: (Tags,Features) -> [[String]] -> [Either Error Row]
 toRows tf = fmap (toRow tf)
 
-toRow :: (Tags,Features) -> [String] -> Either Row Error
-toRow _ [] = Right NotARow
+toRow :: (Tags,Features) -> [String] -> Either Error Row
+toRow _ [] = Left NotARow
 toRow tf row@(firstCol:_)
-    | firstCol == "" || lower firstCol == "sub category" = Right NotARow
+    | firstCol == "" || lower firstCol == "sub category" = Left NotARow
     | otherwise =
-        let eitherFier :: Either (String,String) Row -> Either Row Error
-            eitherFier (Left err) = err & show & ParseError & Right
-            eitherFier (Right r) = Left r
-
-            clean s = replace "_x000D_" "\n" s & trim
-        in row & fixRowLength &> clean & parseRow tf & eitherFier
+        let clean s = replace "_x000D_" "\n" s & trim & filter (\c -> isAscii c || isAlphaNum c)
+        in row & fixRowLength &> clean & parseRow tf & first (show &. ParseError)
 
 fixRowLength :: [String] -> [String]
 fixRowLength l
@@ -104,12 +112,14 @@ fixRowLength l
     where size = length l
 
 parseLocation :: String -> Either String Location
-parseLocation = parseAll $
-    Coords <$> parseDecimal <* delimitDecimals <*> parseDecimal <* optional delimitDecimals <*> takeAll
-    <|> Address <$> takeAll
-    where parseDecimal = (,) <$> (P.takeWhile isDigit <* element '.')
-                             <*> P.takeWhile isDigit
-          delimitDecimals = many' (regularDelimiters <|> space)
+parseLocation "" = Right (Address "")
+parseLocation s = parseAll (
+        Coords <$> parseDecimal <* delimitDecimals <*> parseDecimal <* optional delimitDecimals <*> takeAll
+        <|> Address <$> parseNonDecimal) s
+    where parseDecimal = (,) <$> (digits <* element '.')
+                             <*> digits
+          parseNonDecimal = (\a b -> fromList [a] <> b) <$> satisfy_ (not.isDigit) <*> P.takeAll
+          delimitDecimals = some' (regularDelimiters <|> space)
 
 range min max = (Min min, Max max)
 
@@ -196,6 +206,7 @@ parseFromSet set s =
     &>> (\matchWith -> fuzzyDecider (F.get set (stringToText matchWith)) matchWith)
     &> sequenceA
     & join
+    &> nub'
   where
         fuzzyDecider _ "" = Left "there's an empty word"
         fuzzyDecider [] m = Left "text file is empty"
@@ -211,7 +222,8 @@ parseFromSet set s =
         stringToText :: String -> T.Text
         stringToText = toList &. T.pack
 
-
+parseEmails = divideAndParse (spacedDelimiter (regularDelimiters <|> string " -" <|> string "- ")) email
+    where email = (\a b -> a <> "@" <> b) <$> P.takeWhile (/= '@') <* element '@' <*> P.takeAll
 
 parseRow :: (Tags,Features) -> [String] -> Either (String,String) Row
 parseRow (Tags tags, Features features)
@@ -234,7 +246,7 @@ parseRow (Tags tags, Features features)
     ]
     =
         Row
-        <$> (parseFromSet tags (upper subCategories) & addCaption "subCategories")
+        <$> (parseFromSet tags subCategories & addCaption "subCategories")
         <*> (asIs name & addCaption "name")
         <*> (parseLocation location & addCaption "location")
         <*> (asIs description & addCaption "description")
@@ -244,12 +256,12 @@ parseRow (Tags tags, Features features)
         <*> (asIs priceSymbol & addCaption "priceSymbol")
         <*> (asIs priceRange & addCaption "priceRange")
         <*> (divideUsual parsePhoneNumber (lower phoneNumbers) & addCaption ("phoneNumbers: " <> phoneNumbers))
-        <*> (divideUsualStrings (lower emails) & addCaption "emails")
+        <*> (parseEmails (lower emails) & addCaption "emails")
         <*> (parseWebsites (lower websites) & addCaption "websites")
-        <*> (parseFromSet features (upper facilities) & addCaption "facilities")
+        <*> (parseFromSet features facilities & addCaption "facilities")
         <*> (parseBool (lower photos) & addCaption "photos")
         <*> (asIs academicNotes & addCaption "academicNotes")
-        <*> (parseFromSet tags (upper additionalNotes) & addCaption "additionalNotes")
+        <*> (parseFromSet tags additionalNotes & addCaption "additionalNotes")
     where addCaption s = first (\e -> (e,s))
 
 example :: [String]

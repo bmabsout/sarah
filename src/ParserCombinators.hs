@@ -19,7 +19,9 @@ divideUsualStrings :: String -> Either String [String]
 divideUsualStrings = parseAll (sepBy delimiter) &.> filter (not.null)
 
 delimiter :: Parser String ()
-delimiter = spaces *> regularDelimiters <* many' (space <|> newLine)
+delimiter = spacedDelimiter regularDelimiters
+
+spacedDelimiter d = spaces *> d <* many' (space <|> newLine)
 
 regularDelimiters = some' $ element '/' <|> element '\\' <|> element '|' <|> element ',' <|> newLine
 

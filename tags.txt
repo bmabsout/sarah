@@ -1,90 +1,86 @@
-BREAKFAST
-OUTDOOR
-MOVIES & THEATRES
-CLASSES
-DAY CARE
-VENUES
-ACCESSORIES
-CLOTHING
-BRUNCH
-INDOOR
-SHOWS & MUSICALS
-WORKSHOPS
-BABYSITTER
-NURSE
-PARTY SUPPLIES
-KIDS FOOD PRODUCTS
-FITNESS
-LUNCH
-DAY OUT
-FAIRS & FESTIVALS
-CAMPS
-SPECIAL NEEDS
-CAKE SHOPS
-ORGANIC PRODUCTS
-WELLNESS & BEAUTY
-FAVORS
-DINNER
-PARKING
-WEEKEND GETAWAY
-WORK SHOPS
-SPORTS
-SPECIALIZED CENTERS
-PARTY PLANNERS
-KIDS CLOTHING
-JUICES&DESSERTS
-BEACH
-WATERPARK
-MUSIC
-HAIR SALON
-ENTERTAINMENT
-TOYS
-BREASTFEEDING
-ORGANIC&HEALTHY OPTIONS
-NATURE OUTGOING
-ARTS
-WORKSHOP
-PHOTOGRAPHER
-BOOKS
-CONSULTANTS
-VEGAN OPTIONS
-MUSEUMS
-SCIENCE
-CONSULTANT
-CARTERER
-GUIDES & BOOKS
-GLUTEN-FREE OPTIONS
-ATTRACTIONS
-EDUCATION
-SPORTS GEAR
-STATIONARY
-PARKS&PLAYGROUNDS
-BABY CARE
-IN-MALL
-ZOO&FARMS
-STROLLERS
-CAR SEATS
-PLAY AREA
-KIDS FURNITURE
-E - STORE
-KIDS ROOM ACCESSORIES
-BUFFET
-VALET PARKING
-ACCEPTS CREDIT CARD
-TAKES RESERVATION
-PET FRIENDLY
-REQUIRES BOOKING
-TICKETS AT THE DOOR
-REQUIRES PRE-ORDER (CAKE)
-OUTDOOR SEATING
-paid cash upon delivery
-paid cash&card upon delivery
+Breakfast
+Outdoor
+Movies & Theatres
+Classes
+Day Care
+Venues
+Accessories
+Clothing
+Brunch
+Indoor
+Shows & Musicals
+Workshops
+Babysitter
+Nurse
+Party Supplies
+Kids Food Products
+Fitness
+Lunch
+Day Out
+Fairs & Festivals
+Camps
+Special Needs
+Cake Shops
+Organic Products
+Wellness & Beauty
+Favors
+Dinner
+Parking
+Weekend Getaway
+Work Shops
+Sports
+Specialized Centers
+Party Planners
+Kids Clothing
+Juices & Desserts
+Beach
+Waterpark
+Music
+Hair Salon
+Entertainment
+Toys
+Breastfeeding
+Organic & Healthy Options
+Nature Outgoing
+Arts
+Workshop
+Photographer
+Books
+Consultants
+Vegan Options
+Museums
+Science
+Consultant
+Carterer
+Guides & Books
+Gluten-free Options
+Attractions
+Education
+Sports Gear
+Stationary
+Parks&Playgrounds
+Baby Care
+In-mall
+Zoo&Farms
+Strollers
+Car Seats
+Play Area
+Kids Furniture
+E-Store
+Kids Room Accessories
+Buffet
+Valet Parking
+Accepts Credit Card
+Takes Reservation
+Pet Friendly
+Requires Booking
+Tickets At The Door
+Requires Pre-order
+Outdoor Seating
+Paid Cash Upon Delivery
+Paid Card Upon Delivery
 
-MOBILE APPLICATION
-NON SMOKING AREA AVAILABLE
-ACCESSIBILITY FOR DISABLED
-ORGANIC&HEALTHY OPTIONS
-vegan options
-BABY Gears
-
-
+Mobile Application
+Non Smoking Area Available
+Accessibility For Disabled
+Baby Gears
