@@ -13,10 +13,11 @@ import Foundation.Collection
 import Foundation.String.Read (readNatural)
 import Data.Char (isDigit)
 import Convenience
+import qualified Data.Set as S
 
 
-divideUsualStrings :: String -> Either String [String]
-divideUsualStrings = parseAll (sepBy delimiter) &.> filter (not.null)
+divideUsualStrings :: String -> Either String (S.Set String)
+divideUsualStrings = parseAll (sepBy delimiter) &.> filter (not.null) &.> S.fromList
 
 delimiter :: Parser String ()
 delimiter = spacedDelimiter regularDelimiters
@@ -64,14 +65,10 @@ digits = some digit
                    Nothing -> reportError $ Satisfy $ Just "not a number")
          & join
 
-parseBool s = Right $ case lower s of
-    "yes" -> True
-    "no" -> False
+divideAndParse :: (Ord a) => Parser String () -> Parser String a -> String -> Either String (S.Set a)
+divideAndParse delimiter parser s = parseAll (sepBy delimiter) s &>> parseAll parser &> sequenceA & join &> S.fromList
 
-divideAndParse :: Parser String () -> Parser String a -> String -> Either String [a]
-divideAndParse delimiter parser s = parseAll (sepBy delimiter) s &>> parseAll parser &> sequenceA & join
-
-divideUsual :: Parser String a -> String -> Either String [a]
+divideUsual :: (Ord a) => Parser String a -> String -> Either String (S.Set a)
 divideUsual = divideAndParse delimiter
 
 showError ::  ParseError String -> String

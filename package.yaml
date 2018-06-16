@@ -37,6 +37,7 @@ dependencies:
 - basement
 - fsnotify
 - fuzzyset
+- generic-deriving
 
 library:
   source-dirs: src

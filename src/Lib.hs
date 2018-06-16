@@ -7,6 +7,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
+-- # LANGUAGE DeriveGeneric #
 
 module Lib
     ( module Lib
@@ -24,10 +25,12 @@ import Control.Monad
 import qualified Data.Text as T
 import FeaturesHandler
 import qualified Data.FuzzySet as F
+import qualified Data.Set as S
+import qualified Prelude as Prelude
 
 data Location = Coords (Natural,Natural) (Natural,Natural) String
               | Address String
-              deriving (Show, Eq)
+              deriving (Show, Eq, Ord)
 
 address (Coords _ _ a) = a
 address (Address a) = a
@@ -50,17 +53,17 @@ data Day = Monday
          | Sunday
          deriving (Show, Enum, Eq, Ord, Bounded)
 
-data AmPm = Am | Pm deriving (Show, Eq)
-data Time = Time {hour :: Natural, minute :: Natural, ampm :: AmPm} deriving (Show, Eq)
+data AmPm = Am | Pm deriving (Show, Eq, Ord)
+data Time = Time {hour :: Natural, minute :: Natural, ampm :: AmPm} deriving (Show, Eq, Ord)
 timeToString :: Time -> String
 timeToString (Time hour minute ampm) = pad (show hour) <> ":" <> pad (show minute) <> " " <> lower (show ampm)
     where pad s
             | length s == 0 = "00"
             | length s == 1 = "0" <> s
             | otherwise     = s
-data RangeDayAndTime = RangeDayAndTime (Either Day (Range Day)) (Range Time) deriving (Show,Eq)
-data PhoneNumber = PhoneNumber {countryCode :: String, areaCode :: String, number :: String, extension :: Maybe String} deriving (Show,Eq)
-data Url = Url {subnet :: String, urlAddress :: String, rest :: String} deriving (Show,Eq)
+data RangeDayAndTime = RangeDayAndTime (Either Day (Range Day)) (Range Time) deriving (Show,Eq,Ord)
+data PhoneNumber = PhoneNumber {countryCode :: String, areaCode :: String, number :: String, extension :: Maybe String} deriving (Show,Eq,Ord)
+data Url = Url {subnet :: String, urlAddress :: String, rest :: String} deriving (Show,Eq,Ord)
 
 type Range a = (Min a, Max a)
 type AgeGroup = Maybe (Range Natural)
@@ -73,36 +76,42 @@ phoneToString p = "(+"<>countryCode p<>") "
                   <> maybe "" (" ext " <>) (extension p)
 
 data Row = Row
-    { subCategories       :: [String]
+    { categories          :: S.Set String
+    , subCategories       :: S.Set String
     , name                :: String
     , location            :: Location
     , description         :: String
-    , openingHoursAndDays :: [RangeDayAndTime]
+    , openingHoursAndDays :: S.Set RangeDayAndTime
     , ageGroup            :: AgeGroup
     , ageRange            :: String
     , priceSymbol         :: String
     , priceRange          :: String
-    , phoneNumbers        :: [PhoneNumber]
-    , emails              :: [String]
-    , websites            :: [Url]
-    , facilities          :: [String]
-    , photos              :: Bool
+    , phoneNumbers        :: S.Set PhoneNumber
+    , emails              :: S.Set String
+    , websites            :: S.Set Url
+    , facilities          :: S.Set String
+    , photos              :: String
     , academicNotes       :: String
-    , additionalNotes     :: [String]
-    } deriving Show
+    , additionalNotes     :: S.Set String
+    } deriving (Show, Eq)
 
-data Error = ParseError String | NotARow deriving (Show,Eq)
+emptyRow = Row mempty mempty "" (Address "") "" mempty Nothing "" "" "" mempty mempty mempty mempty "" "" mempty
 
-toRows :: (Tags,Features) -> [[String]] -> [Either Error Row]
-toRows tf = fmap (toRow tf)
+data Error = ParseError String | NotARow | Duplicate String Int String deriving (Show,Eq)
 
-toRow :: (Tags,Features) -> [String] -> Either Error Row
-toRow _ [] = Left NotARow
-toRow tf row@(firstCol:_)
+toRows :: String -> (Tags,Features) -> [[String]] -> [Either Error Row]
+toRows category tf = fmap (toRow category tf)
+
+toRow :: String -> (Tags,Features) -> [String] -> Either Error Row
+toRow _ _ [] = Left NotARow
+toRow category tf row@(firstCol:_)
     | firstCol == "" || lower firstCol == "sub category" = Left NotARow
     | otherwise =
         let clean s = replace "_x000D_" "\n" s & trim & filter (\c -> isAscii c || isAlphaNum c)
-        in row & fixRowLength &> clean & parseRow tf & first (show &. ParseError)
+        in row & fixRowLength &> clean & parseRow category tf & first (show &. ParseError)
+
+combineRowsCategories :: [Row] -> [Row]
+combineRowsCategories r = []
 
 fixRowLength :: [String] -> [String]
 fixRowLength l
@@ -122,7 +131,6 @@ parseLocation s = parseAll (
           delimitDecimals = some' (regularDelimiters <|> space)
 
 range min max = (Min min, Max max)
-
 
 
 parseRangeDayAndTime :: Parser String RangeDayAndTime
@@ -158,7 +166,7 @@ parseRangeDayAndTime = RangeDayAndTime <$> ((rangeParser dayParser &> Right) <|>
 
 parseAgeGroup :: String -> Either String AgeGroup
 parseAgeGroup = divideUsual singularGroupParser
-                &>> foldl' (Data.Semigroup.<>) Nothing
+                &>> Prelude.foldl (Data.Semigroup.<>) Nothing
     where
         singularGroupParser :: Parser String AgeGroup
         singularGroupParser =
@@ -168,7 +176,7 @@ parseAgeGroup = divideUsual singularGroupParser
             <|> elements "adult" <* optional (element 's') <* spaces *> pure Nothing
 
 
-parseWebsites :: String -> Either String [Url]
+parseWebsites :: String -> Either String (S.Set Url)
 parseWebsites = divideAndParse (some' (space <|> newLine)) parseWebsite
     where
         parseWebsite :: Parser String Url
@@ -200,13 +208,14 @@ parsePhoneNumber = do
     where numDigits from to = repeat (Between $ from `And` to) digit &> fromList
 
 
-parseFromSet :: F.FuzzySet -> String -> Either String [String]
+parseFromSet :: F.FuzzySet -> String -> Either String (S.Set String)
 parseFromSet set s =
     divideUsualStrings s
+    &> S.toList
     &>> (\matchWith -> fuzzyDecider (F.get set (stringToText matchWith)) matchWith)
     &> sequenceA
     & join
-    &> nub'
+    &> S.fromList
   where
         fuzzyDecider _ "" = Left "there's an empty word"
         fuzzyDecider [] m = Left "text file is empty"
@@ -225,8 +234,8 @@ parseFromSet set s =
 parseEmails = divideAndParse (spacedDelimiter (regularDelimiters <|> string " -" <|> string "- ")) email
     where email = (\a b -> a <> "@" <> b) <$> P.takeWhile (/= '@') <* element '@' <*> P.takeAll
 
-parseRow :: (Tags,Features) -> [String] -> Either (String,String) Row
-parseRow (Tags tags, Features features)
+parseRow :: String -> (Tags,Features) -> [String] -> Either (String,String) Row
+parseRow category (Tags tags, Features features)
     [ subCategories
     , name
     , location
@@ -245,23 +254,23 @@ parseRow (Tags tags, Features features)
     , additionalNotes
     ]
     =
-        Row
-        <$> (parseFromSet tags subCategories & addCaption "subCategories")
-        <*> (asIs name & addCaption "name")
-        <*> (parseLocation location & addCaption "location")
-        <*> (asIs description & addCaption "description")
+        (Row (S.singleton category))
+        <$> (parseFromSet tags subCategories                              & addCaption "subCategories")
+        <*> (asIs name                                                    & addCaption "name")
+        <*> (parseLocation location                                       & addCaption "location")
+        <*> (asIs description                                             & addCaption "description")
         <*> (divideUsual parseRangeDayAndTime (lower openingHoursAndDays) & addCaption "openingHoursAndDays")
-        <*> (parseAgeGroup (lower ageGroup) & addCaption "ageGroup")
-        <*> (asIs ageRange & addCaption "ageRange")
-        <*> (asIs priceSymbol & addCaption "priceSymbol")
-        <*> (asIs priceRange & addCaption "priceRange")
-        <*> (divideUsual parsePhoneNumber (lower phoneNumbers) & addCaption ("phoneNumbers: " <> phoneNumbers))
-        <*> (parseEmails (lower emails) & addCaption "emails")
-        <*> (parseWebsites (lower websites) & addCaption "websites")
-        <*> (parseFromSet features facilities & addCaption "facilities")
-        <*> (parseBool (lower photos) & addCaption "photos")
-        <*> (asIs academicNotes & addCaption "academicNotes")
-        <*> (parseFromSet tags additionalNotes & addCaption "additionalNotes")
+        <*> (parseAgeGroup (lower ageGroup)                               & addCaption "ageGroup")
+        <*> (asIs ageRange                                                & addCaption "ageRange")
+        <*> (asIs priceSymbol                                             & addCaption "priceSymbol")
+        <*> (asIs priceRange                                              & addCaption "priceRange")
+        <*> (divideUsual parsePhoneNumber (lower phoneNumbers)            & addCaption ("phoneNumbers: " <> phoneNumbers))
+        <*> (parseEmails (lower emails)                                   & addCaption "emails")
+        <*> (parseWebsites (lower websites)                               & addCaption "websites")
+        <*> (parseFromSet features facilities                             & addCaption "facilities")
+        <*> (asIs photos                                                  & addCaption "photos")
+        <*> (asIs academicNotes                                           & addCaption "academicNotes")
+        <*> (parseFromSet tags additionalNotes                            & addCaption "additionalNotes")
     where addCaption s = first (\e -> (e,s))
 
 example :: [String]
