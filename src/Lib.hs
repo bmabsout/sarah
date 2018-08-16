@@ -17,7 +17,7 @@ import Data.Semigroup
 import Foundation as F hiding ((<>))
 import Foundation.String
 import Foundation.Parser as P
-import Data.Char (isDigit, isAscii, isAlphaNum)
+import Data.Char (isDigit)
 import Convenience
 import ParserCombinators
 import Data.Traversable
@@ -76,8 +76,7 @@ phoneToString p = "(+"<>countryCode p<>") "
                   <> maybe "" (" ext " <>) (extension p)
 
 data Row = Row
-    { categories          :: S.Set String
-    , subCategories       :: S.Set String
+    { subCategories       :: S.Set String
     , name                :: String
     , location            :: Location
     , description         :: String
@@ -95,20 +94,20 @@ data Row = Row
     , additionalNotes     :: S.Set String
     } deriving (Show, Eq)
 
-emptyRow = Row mempty mempty "" (Address "") "" mempty Nothing "" "" "" mempty mempty mempty mempty "" "" mempty
+emptyRow = Row mempty "" (Address "") "" mempty Nothing "" "" "" mempty mempty mempty mempty "" "" mempty
 
-data Error = ParseError String | NotARow | Duplicate String Int String deriving (Show,Eq)
+data Error = ParseError String | NotARow deriving (Show,Eq)
 
-toRows :: String -> (Tags,Features) -> [[String]] -> [Either Error Row]
-toRows category tf = fmap (toRow category tf)
+toRows :: Filters -> [[String]] -> [Either Error Row]
+toRows options = fmap (toRow options)
 
-toRow :: String -> (Tags,Features) -> [String] -> Either Error Row
-toRow _ _ [] = Left NotARow
-toRow category tf row@(firstCol:_)
+
+toRow :: Filters -> [String] -> Either Error Row
+toRow _ [] = Left NotARow
+toRow options row@(firstCol:_)
     | firstCol == "" || lower firstCol == "sub category" = Left NotARow
     | otherwise =
-        let clean s = replace "_x000D_" "\n" s & trim & filter (\c -> isAscii c || isAlphaNum c)
-        in row & fixRowLength &> clean & parseRow category tf & first (show &. ParseError)
+        row & fixRowLength &> clean & parseRow options & first (show &. ParseError)
 
 combineRowsCategories :: [Row] -> [Row]
 combineRowsCategories r = []
@@ -218,7 +217,7 @@ parseFromSet set s =
     &> S.fromList
   where
         fuzzyDecider _ "" = Left "there's an empty word"
-        fuzzyDecider [] m = Left "text file is empty"
+        fuzzyDecider [] m = Left $ "couldn't find " <> m
         fuzzyDecider ((score,deTextMe):_) matchWith
             | score >= 0.7 = Right closestMatch
             | otherwise   = Left $ "couldn't find '"
@@ -234,8 +233,8 @@ parseFromSet set s =
 parseEmails = divideAndParse (spacedDelimiter (regularDelimiters <|> string " -" <|> string "- ")) email
     where email = (\a b -> a <> "@" <> b) <$> P.takeWhile (/= '@') <* element '@' <*> P.takeAll
 
-parseRow :: String -> (Tags,Features) -> [String] -> Either (String,String) Row
-parseRow category (Tags tags, Features features)
+parseRow :: Filters -> [String] -> Either (String,String) Row
+parseRow (SubCategories subCategorySet, Amenities amenitieSet, AdditionalNotes additionalNoteSet)
     [ subCategories
     , name
     , location
@@ -254,8 +253,8 @@ parseRow category (Tags tags, Features features)
     , additionalNotes
     ]
     =
-        (Row (S.singleton category))
-        <$> (parseFromSet tags subCategories                              & addCaption "subCategories")
+        Row
+        <$> (parseFromSet subCategorySet subCategories                    & addCaption "subCategories")
         <*> (asIs name                                                    & addCaption "name")
         <*> (parseLocation location                                       & addCaption "location")
         <*> (asIs description                                             & addCaption "description")
@@ -267,10 +266,10 @@ parseRow category (Tags tags, Features features)
         <*> (divideUsual parsePhoneNumber (lower phoneNumbers)            & addCaption ("phoneNumbers: " <> phoneNumbers))
         <*> (parseEmails (lower emails)                                   & addCaption "emails")
         <*> (parseWebsites (lower websites)                               & addCaption "websites")
-        <*> (parseFromSet features facilities                             & addCaption "facilities")
+        <*> (parseFromSet amenitieSet facilities                          & addCaption "facilities")
         <*> (asIs photos                                                  & addCaption "photos")
         <*> (asIs academicNotes                                           & addCaption "academicNotes")
-        <*> (parseFromSet tags additionalNotes                            & addCaption "additionalNotes")
+        <*> (parseFromSet additionalNoteSet additionalNotes               & addCaption "additionalNotes")
     where addCaption s = first (\e -> (e,s))
 
 example :: [String]

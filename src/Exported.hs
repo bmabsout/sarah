@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Exported(export, titles) where
+module Exported(export, titles, rowContent) where
 
 import Foundation
 import Foundation.Collection
@@ -17,15 +17,18 @@ infixl 1 =:
 (=:) = (,)
 
 titles :: [String]
-titles = export emptyRow &> fst
+titles = rowContent ([],emptyRow) & M.keys
 
-export :: Row -> [(String, String)]
-export row =
+export = rowContent &. M.elems
+
+rowContent :: ([String], Row) -> M.Map String String
+rowContent (categories, row) =
     ([ "title"          =: name
      , "content"        =: description
-     , "categories"     =: categories &. intersperseAndCollide "|"
-     , "features"       =: facilities &. intersperseAndCollide "|"
-     , "tags"           =: \r -> (subCategories r `S.union` additionalNotes r) & intersperseAndCollide "|"
+     , "categories"     =: const categories &. intersperse "|" &. mconcat
+     , "subCategories"  =: subCategories &. intersperseAndCollide "|"
+     , "facilities"     =: facilities &. intersperseAndCollide "|"
+     , "additionalNotes"=: additionalNotes &. intersperseAndCollide "|"
      , "ages"           =: ageGroup &. (maybe "" (\(Min from, Max to) -> show from <> "-" <> show to))
      , "address"        =: location &. address
      , "latitude"       =: location &. lat
@@ -36,6 +39,7 @@ export row =
      , "business_hours" =: openingHoursAndDays &. S.toList &. eachDay &.> dayToString &. intersperse ". " &. mconcat
      ] &> (second ($ row))
     ) <> web2List (websites row & S.toList)
+    & M.fromList
   where intersperseAndCollide seperator = S.toList &. intersperse seperator &. mconcat
 
 web2List :: [Url] -> [(String,String)]

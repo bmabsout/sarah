@@ -8,10 +8,10 @@ module ParserCombinators(module ParserCombinators) where
 import Control.Monad (join)
 import Foundation
 import Foundation.Parser
-import Foundation.String
 import Foundation.Collection
+import Foundation.String
 import Foundation.String.Read (readNatural)
-import Data.Char (isDigit)
+import Data.Char (isDigit, isAscii, isAlphaNum)
 import Convenience
 import qualified Data.Set as S
 
@@ -48,6 +48,8 @@ sepBy pattern =
 
 trim :: String -> String
 trim = span spaceCheck &. snd &. spanEnd spaceCheck &. fst
+
+clean s = replace "_x000D_" "\n" s & trim & filter (\c -> isAscii c || isAlphaNum c)
 
 spaceCheck e = e == ' ' || e == '\t' || e == '\n' || e == '\r'
 

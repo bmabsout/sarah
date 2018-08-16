@@ -37,7 +37,10 @@ dependencies:
 - basement
 - fsnotify
 - fuzzyset
+- bktrees
+- edit-distance
 - generic-deriving
+- directory
 
 library:
   source-dirs: src

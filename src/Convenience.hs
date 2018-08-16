@@ -7,6 +7,9 @@ import Data.List
 -- import Data.Matrix
 
 
+mif :: (Applicative m, Monoid (m a)) => Bool -> a -> m a
+mif b a = if b then pure a else mempty
+
 infixl 2 &.
 (&.) :: (a -> b) -> (b -> c) -> a -> c
 (&.) = flip (.)
@@ -44,6 +47,17 @@ sortAndNub = go S.empty
 
 nub' :: (Ord a) => [a] -> [a]
 nub' = S.fromList &. S.toList
+
+data NewOrder a = NewOrder a (a -> a -> Ordering)
+
+instance Eq (NewOrder a) where
+  a == b = a `compare` b == EQ
+
+instance Ord (NewOrder a) where
+  compare (NewOrder a f) (NewOrder b _) = f a b
+
+nubby' :: (a -> a -> Ordering) -> [a] -> [a]
+nubby' orderer l = l &> (\a -> NewOrder a orderer) & S.fromList & S.toList &> (\(NewOrder a _) -> a)
 
 ofLength :: Integral b => b -> [a] -> Bool
 ofLength 0 []     = True
