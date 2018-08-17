@@ -4,8 +4,4 @@ Specialized Centers
 Hair Salon
 Workshop
 Consultancy Services
-Kitchen
-Outdoor Playground
-Bus Service
-Camps
-Mobile Application
+Camp

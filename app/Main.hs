@@ -18,10 +18,10 @@ import qualified Data.ByteString.Lazy as L
 import Data.Maybe (fromMaybe)
 import Control.Monad (forever, msum, guard)
 import Data.Function ((&))
-import qualified Data.FuzzySet as Fuzzy
 import Data.Text (Text,unpack)
 import qualified Data.Map.Lazy as M
 import qualified Prelude as P
+import qualified Data.Set as S
 import qualified Data.Semigroup as Semigroup
 import System.Console.ANSI(clearScreen)
 import Codec.Xlsx
@@ -35,6 +35,7 @@ import System.FSNotify
 import Control.Concurrent (threadDelay)
 import Basement.From
 import Control.Exception
+import qualified Data.Foldable as Foldable
 import qualified Data.Set.BKTree as BK
 import qualified Text.EditDistance as ED
 
@@ -71,20 +72,25 @@ loadXlsx fp = do
   input    <- getWorksheets $ toXlsx bs
   allFilters <- readAllFilters
   let csvName = replaceExtension fp "csv"
-      filtersCombined = mconcat (M.elems allFilters &> filterMap Fuzzy.values)
-                        & filterMap Fuzzy.fromList
+      filtersCombined :: Filters
+      filtersCombined = allFilters
+                        & M.elems -- [FilterOptions -> [String]]
+                        & combineFilters -- FilterOptions -> [String]
+                        &> toFuzzy
+
   input
     &> (\(worksheetTitle, worksheetContent) ->
             case getXlsxValues $ worksheetValues worksheetContent of
               Nothing -> Left "Skipping invalid worksheet.."
-              Just ws -> case M.lookup (unpack worksheetTitle) allFilters of
+              Just ws -> case M.lookup (unpack worksheetTitle & fromString) allFilters of
                             Nothing -> Left $ "Category "
                                        <> (unpack worksheetTitle & fromString)
                                        <> " is missing a corresponding folder in options"
-                            Just filters -> handleParseErrors filtersCombined ws worksheetTitle
+                            Just _ -> handleParseErrors filtersCombined ws worksheetTitle
        )
     & P.sequence & second P.concat
     >>= duplicatesHandler
+    >>= wrongFiltersHandler (allFilters &>> S.fromList)
     & either putStrLn (\rows -> do
                           almostDuplicateWarnings (rows &> snd)
                           writeCsv csvName (rows &> export)
@@ -112,6 +118,38 @@ almostDuplicateWarnings l =
 
   where names = l &> name & nub' &> (toList)
         fuzzied = names & BK.fromList
+
+wrongFiltersHandler :: M.Map String (FilterType -> S.Set String)
+                    -> [([String], Row)]
+                    -> Either String [([String], Row)]
+wrongFiltersHandler filterMap = fmap wrongFilterHandler &. P.sequence
+  where
+    wrongFilterHandler :: ([String], Row) -> Either String ([String], Row)
+    wrongFilterHandler (cats, row) =
+      [ elementsOf SubCategories (subCategories row)
+      , elementsOf Amenities (facilities row)
+      , elementsOf AdditionalNotes (additionalNotes row)
+      ] & mconcat & Foldable.asum & maybe (Right (cats,row)) Left
+
+      where
+        combinedFilters :: FilterType -> S.Set String
+        combinedFilters =
+          cats &> (filterMap M.!?) & catMaybes & combineFilters
+
+
+        elementsOf :: FilterType -> S.Set String -> [Maybe String]
+        elementsOf t elems =
+          elems
+          & S.toList
+          &> \el ->
+              if S.member el (combinedFilters t)
+              then Nothing
+              else Just $ el <> " does not belong in the "
+                             <> show t <> " of one of "
+                             <> show cats
+
+
+
 
 duplicatesHandler :: [(String,Int,Row)] -> Either String [([String], Row)]
 duplicatesHandler indexedRows =

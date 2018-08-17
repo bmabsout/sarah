@@ -234,7 +234,7 @@ parseEmails = divideAndParse (spacedDelimiter (regularDelimiters <|> string " -"
     where email = (\a b -> a <> "@" <> b) <$> P.takeWhile (/= '@') <* element '@' <*> P.takeAll
 
 parseRow :: Filters -> [String] -> Either (String,String) Row
-parseRow (SubCategories subCategorySet, Amenities amenitieSet, AdditionalNotes additionalNoteSet)
+parseRow filters
     [ subCategories
     , name
     , location
@@ -254,7 +254,7 @@ parseRow (SubCategories subCategorySet, Amenities amenitieSet, AdditionalNotes a
     ]
     =
         Row
-        <$> (parseFromSet subCategorySet subCategories                    & addCaption "subCategories")
+        <$> (parseFromSet (filters SubCategories) subCategories           & addCaption "subCategories")
         <*> (asIs name                                                    & addCaption "name")
         <*> (parseLocation location                                       & addCaption "location")
         <*> (asIs description                                             & addCaption "description")
@@ -266,10 +266,10 @@ parseRow (SubCategories subCategorySet, Amenities amenitieSet, AdditionalNotes a
         <*> (divideUsual parsePhoneNumber (lower phoneNumbers)            & addCaption ("phoneNumbers: " <> phoneNumbers))
         <*> (parseEmails (lower emails)                                   & addCaption "emails")
         <*> (parseWebsites (lower websites)                               & addCaption "websites")
-        <*> (parseFromSet amenitieSet facilities                          & addCaption "facilities")
+        <*> (parseFromSet (filters Amenities) facilities                  & addCaption "facilities")
         <*> (asIs photos                                                  & addCaption "photos")
         <*> (asIs academicNotes                                           & addCaption "academicNotes")
-        <*> (parseFromSet additionalNoteSet additionalNotes               & addCaption "additionalNotes")
+        <*> (parseFromSet (filters AdditionalNotes) additionalNotes       & addCaption "additionalNotes")
     where addCaption s = first (\e -> (e,s))
 
 example :: [String]

@@ -1,14 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 
 module FeaturesHandler(module FeaturesHandler) where
 
 import Data.FuzzySet
 import Convenience
-import qualified Foundation.String as FS
 import qualified Foundation as Foundation
-
 import System.Directory
 import System.FilePath
 import qualified Data.Text as T
@@ -16,31 +15,39 @@ import qualified Data.Map.Lazy as M
 import ParserCombinators
 
 
-readSet :: FilePath -> IO FuzzySet
-readSet s = readFile s &> lines &>> (Foundation.fromList &. clean &. Foundation.toList &. T.pack) &> fromList
+readFiltersInFile :: FilePath -> IO [Foundation.String]
+readFiltersInFile s =
+    readFile s
+    &> lines
+    &>> (Foundation.fromList &. clean)
 
-readFilters :: FilePath -> IO Filters
-readFilters fp =
-    (,,)
-    <$> (readSet (fp </> "Filters.txt") &> SubCategories)
-    <*> (readSet (fp </> "Amenities.txt") &> Amenities)
-    <*> (readSet (fp </> "Additional Details.txt") &> AdditionalNotes)
+readFilters :: FilePath -> IO (FilterType -> [Foundation.String])
+readFilters fp = do
+   sub  <- readFiltersInFile (fp </> "Subcategories.txt")
+   ame  <- readFiltersInFile (fp </> "Amenities.txt")
+   adi  <- readFiltersInFile (fp </> "Additional Details.txt")
+   pure $ \case
+        SubCategories   -> sub
+        Amenities       -> ame
+        AdditionalNotes -> adi
 
-readAllFilters :: IO (M.Map String Filters)
+readAllFilters :: IO (M.Map Foundation.String (FilterType -> [Foundation.String]))
 readAllFilters = do
     categories <- listDirectory "options"
 
     catsAndFilters <- mapM (\category -> do
         filters <- readFilters ("options" </> category)
-        pure (category, filters)
+        pure (category & Foundation.fromList, filters)
         ) categories
     pure $ M.fromList catsAndFilters
 
-newtype SubCategories a = SubCategories a deriving (Show, Eq, Monoid)
-newtype Amenities a = Amenities a deriving (Show, Eq, Monoid)
-newtype AdditionalNotes a = AdditionalNotes a deriving (Show, Eq, Monoid)
 
-type Filters = (SubCategories FuzzySet, Amenities FuzzySet, AdditionalNotes FuzzySet)
+toFuzzy :: [Foundation.String] -> FuzzySet
+toFuzzy = fmap (Foundation.toList &. T.pack) &. fromList
 
-filterMap f (SubCategories s, Amenities am, AdditionalNotes ad) =
-    (SubCategories $ f s, Amenities $ f am, AdditionalNotes $ f ad)
+data FilterType = SubCategories | Amenities | AdditionalNotes deriving Show
+
+type Filters = FilterType -> FuzzySet
+
+combineFilters :: Monoid a => [FilterType -> a] -> FilterType -> a
+combineFilters = sequence &.> mconcat
