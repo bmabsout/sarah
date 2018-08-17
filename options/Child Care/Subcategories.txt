@@ -1,10 +1,7 @@
-Outdoor
-Indoor
-Day Out
-Weekend Getaway
-Beach & Waterpark
-Nature Outing
-Museums
-Attraction
-Movies & Theaters
-Zoo & Farms
+Day Care
+Babysitter/Nurse
+Specialized Centers
+Hair Salon
+Workshop
+Consultancy Services
+Camp

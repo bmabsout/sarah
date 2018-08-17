@@ -120,21 +120,22 @@ almostDuplicateWarnings l =
         fuzzied = names & BK.fromList
 
 wrongFiltersHandler :: M.Map String (FilterType -> S.Set String)
-                    -> [([String], Row)]
+                    -> [(Cats, Row)]
                     -> Either String [([String], Row)]
 wrongFiltersHandler filterMap = fmap wrongFilterHandler &. P.sequence
   where
-    wrongFilterHandler :: ([String], Row) -> Either String ([String], Row)
+    wrongFilterHandler :: (Cats, Row) -> Either String ([String], Row)
     wrongFilterHandler (cats, row) =
       [ elementsOf SubCategories (subCategories row)
       , elementsOf Amenities (facilities row)
       , elementsOf AdditionalNotes (additionalNotes row)
-      ] & mconcat & Foldable.asum & maybe (Right (cats,row)) Left
+      ] & mconcat & Foldable.asum & maybe (Right (catNames,row)) Left
 
       where
+        catNames = M.keys cats
         combinedFilters :: FilterType -> S.Set String
         combinedFilters =
-          cats &> (filterMap M.!?) & catMaybes & combineFilters
+          catNames &> (filterMap M.!?) & catMaybes & combineFilters
 
 
         elementsOf :: FilterType -> S.Set String -> [Maybe String]
@@ -146,17 +147,17 @@ wrongFiltersHandler filterMap = fmap wrongFilterHandler &. P.sequence
               then Nothing
               else Just $ el <> " does not belong in the "
                              <> show t <> " of one of "
-                             <> show cats
+                             <> show (cats &> N.toList)
 
 
 
 
-duplicatesHandler :: [(String,Int,Row)] -> Either String [([String], Row)]
+duplicatesHandler :: [(String,Int,Row)] -> Either String [(Cats, Row)]
 duplicatesHandler indexedRows =
     indexedRows
     &> duplicateHandler
     & msum
-    & maybe (Right $ uniqueRows & M.elems &> bimap M.keys (\(r,c,i) -> r)) Left
+    & maybe (Right $ uniqueRows & M.elems &> second (\(r,c,i) -> r)) Left
   where
     extractKey row = (row & name, row & location)
 
