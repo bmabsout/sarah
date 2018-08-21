@@ -27,6 +27,7 @@ import FeaturesHandler
 import qualified Data.FuzzySet as F
 import qualified Data.Set as S
 import qualified Prelude as Prelude
+import Linear
 
 data Location = Coords (Natural,Natural) (Natural,Natural) String
               | Address String
@@ -234,7 +235,7 @@ parseEmails = divideAndParse (spacedDelimiter (regularDelimiters <|> string " -"
     where email = (\a b -> a <> "@" <> b) <$> P.takeWhile (/= '@') <* element '@' <*> P.takeAll
 
 parseRow :: Filters -> [String] -> Either (String,String) Row
-parseRow filters
+parseRow (V3 subCatSet amenitySet additionalNoteSet)
     [ subCategories
     , name
     , location
@@ -254,7 +255,7 @@ parseRow filters
     ]
     =
         Row
-        <$> (parseFromSet (filters SubCategories) subCategories           & addCaption "subCategories")
+        <$> (parseFromSet subCatSet subCategories                         & addCaption "subCategories")
         <*> (asIs name                                                    & addCaption "name")
         <*> (parseLocation location                                       & addCaption "location")
         <*> (asIs description                                             & addCaption "description")
@@ -266,10 +267,10 @@ parseRow filters
         <*> (divideUsual parsePhoneNumber (lower phoneNumbers)            & addCaption ("phoneNumbers: " <> phoneNumbers))
         <*> (parseEmails (lower emails)                                   & addCaption "emails")
         <*> (parseWebsites (lower websites)                               & addCaption "websites")
-        <*> (parseFromSet (filters Amenities) facilities                  & addCaption "facilities")
+        <*> (parseFromSet amenitySet facilities                           & addCaption "facilities")
         <*> (asIs photos                                                  & addCaption "photos")
         <*> (asIs academicNotes                                           & addCaption "academicNotes")
-        <*> (parseFromSet (filters AdditionalNotes) additionalNotes       & addCaption "additionalNotes")
+        <*> (parseFromSet additionalNoteSet additionalNotes               & addCaption "additionalNotes")
     where addCaption s = first (\e -> (e,s))
 
 example :: [String]

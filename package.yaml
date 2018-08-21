@@ -41,6 +41,7 @@ dependencies:
 - edit-distance
 - generic-deriving
 - directory
+- linear
 
 library:
   source-dirs: src

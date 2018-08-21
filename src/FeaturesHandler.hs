@@ -12,7 +12,10 @@ import System.Directory
 import System.FilePath
 import qualified Data.Text as T
 import qualified Data.Map.Lazy as M
+import Data.Semigroup
+import Control.Applicative
 import ParserCombinators
+import Linear
 
 
 readFiltersInFile :: FilePath -> IO [Foundation.String]
@@ -21,17 +24,13 @@ readFiltersInFile s =
     &> lines
     &>> (Foundation.fromList &. clean)
 
-readFilters :: FilePath -> IO (FilterType -> [Foundation.String])
-readFilters fp = do
-   sub  <- readFiltersInFile (fp </> "Subcategories.txt")
-   ame  <- readFiltersInFile (fp </> "Amenities.txt")
-   adi  <- readFiltersInFile (fp </> "Additional Details.txt")
-   pure $ \case
-        SubCategories   -> sub
-        Amenities       -> ame
-        AdditionalNotes -> adi
+readFilters :: FilePath -> IO (V3 [Foundation.String])
+readFilters fp =
+   V3 <$> readFiltersInFile (fp </> "Subcategories.txt")
+      <*> readFiltersInFile (fp </> "Amenities.txt")
+      <*> readFiltersInFile (fp </> "Additional Details.txt")
 
-readAllFilters :: IO (M.Map Foundation.String (FilterType -> [Foundation.String]))
+readAllFilters :: IO (M.Map Foundation.String (V3 [Foundation.String]))
 readAllFilters = do
     categories <- listDirectory "options"
 
@@ -41,13 +40,24 @@ readAllFilters = do
         ) categories
     pure $ M.fromList catsAndFilters
 
-
 toFuzzy :: [Foundation.String] -> FuzzySet
 toFuzzy = fmap (Foundation.toList &. T.pack) &. fromList
 
-data FilterType = SubCategories | Amenities | AdditionalNotes deriving Show
+data FilterType = Subcategories | Amenities | AdditionalNotes deriving Show
 
-type Filters = FilterType -> FuzzySet
+asIndex :: FilterType -> V3 a -> a
+asIndex Subcategories (V3 a _ _) = a
+asIndex Amenities (V3 _ b _) = b
+asIndex AdditionalNotes (V3 _ _ c) = c
 
-combineFilters :: Monoid a => [FilterType -> a] -> FilterType -> a
-combineFilters = sequence &.> mconcat
+instance Semigroup a => Semigroup (V3 a) where
+    (<>) = liftA2 (<>)
+
+instance Monoid a => Monoid (V3 a) where
+    mconcat = sequenceA &.> mconcat
+    mempty = pure mempty
+    mappend = liftA2 mappend
+
+
+type Filters = V3 FuzzySet
+

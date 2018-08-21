@@ -38,6 +38,7 @@ import Control.Exception
 import qualified Data.Foldable as Foldable
 import qualified Data.Set.BKTree as BK
 import qualified Text.EditDistance as ED
+import Linear
 
 catchAny :: IO () -> IO ()
 catchAny n =
@@ -74,8 +75,8 @@ loadXlsx fp = do
   let csvName = replaceExtension fp "csv"
       filtersCombined :: Filters
       filtersCombined = allFilters
-                        & M.elems -- [FilterOptions -> [String]]
-                        & combineFilters -- FilterOptions -> [String]
+                        & M.elems
+                        & mconcat
                         &> toFuzzy
 
   input
@@ -119,36 +120,36 @@ almostDuplicateWarnings l =
   where names = l &> name & nub' &> (toList)
         fuzzied = names & BK.fromList
 
-wrongFiltersHandler :: M.Map String (FilterType -> S.Set String)
+wrongFiltersHandler :: M.Map String (V3 (S.Set String))
                     -> [(Cats, Row)]
                     -> Either String [([String], Row)]
 wrongFiltersHandler filterMap = fmap wrongFilterHandler &. P.sequence
   where
     wrongFilterHandler :: (Cats, Row) -> Either String ([String], Row)
     wrongFilterHandler (cats, row) =
-      [ elementsOf SubCategories (subCategories row)
+      [ elementsOf Subcategories (subCategories row)
       , elementsOf Amenities (facilities row)
       , elementsOf AdditionalNotes (additionalNotes row)
-      ] & mconcat & Foldable.asum & maybe (Right (catNames,row)) Left
+      ] & Foldable.asum & maybe (Right (catNames,row)) Left
 
       where
         catNames = M.keys cats
-        combinedFilters :: FilterType -> S.Set String
+        combinedFilters :: V3 (S.Set String)
         combinedFilters =
-          catNames &> (filterMap M.!?) & catMaybes & combineFilters
+          catNames &> (filterMap M.!?) & catMaybes & mconcat
 
-
-        elementsOf :: FilterType -> S.Set String -> [Maybe String]
+        elementsOf :: FilterType -> S.Set String -> Maybe String
         elementsOf t elems =
-          elems
-          & S.toList
-          &> \el ->
-              if S.member el (combinedFilters t)
-              then Nothing
-              else Just $ el <> " does not belong in the "
-                             <> show t <> " of one of "
-                             <> show (cats &> N.toList)
-
+          notInCategories & S.toList & N.nonEmpty
+          &> (\l -> show (N.toList l)
+                    <> "\ndoes not belong in the "
+                    <> show t <> " of\n"
+                    <> (cats &> N.toList & M.toList & show)
+                    <> " which are: \n"
+                    <> ((S.toList currentFilters & intersperse "\n" & mconcat))
+              )
+          where notInCategories = elems S.\\ currentFilters
+                currentFilters = asIndex t combinedFilters
 
 
 
