@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Exported(export, titles, rowContent) where
 
@@ -36,7 +37,7 @@ rowContent (categories, row) =
      , "phone"          =: phoneNumbers &. (S.map phoneToString) &. intersperseAndCollide " / "
      , "email"          =: emails &. intersperseAndCollide " / "
      , "price_status"   =: priceSymbol
-     , "business_hours" =: openingHoursAndDays &. S.toList &. eachDay &.> dayToString &. intersperse ". " &. mconcat
+     , "business_hours" =: openingHoursAndDays &. S.toList &. eachDay &. daysToWeirdString
      ] &> (second ($ row))
     ) <> web2List (websites row & S.toList)
     & M.fromList
@@ -63,6 +64,24 @@ eachDay l = l &> dayRangeToList
     where dayRangeToList (RangeDayAndTime (Left d) timeRange) = [(d,timeRange)]
           dayRangeToList (RangeDayAndTime (Right (Min from, Max to)) timeRange) = zip [from..to] (P.repeat timeRange)
 
-dayToString :: (Day, Range Time) -> String
-dayToString (day, (Min from, Max to)) = show day <> ": " <> timeToString from <> " to " <> timeToString to
+data Trie = A [Trie] | S String
 
+showTrie :: Trie -> String
+showTrie (S s) = "s:" <> show (length s & toInteger) <> "\"" <> s <> "\";"
+showTrie (A a) = "a:" <> show (length a & toInteger) <> "{" <> (a &> showTrie & mconcat) <> "}"
+
+daysToWeirdString :: [(Day, Range Time)] -> String
+daysToWeirdString =
+  fmap (\(day, (Min from, Max to)) ->
+          [ S (show day)
+          , A [ S "open"
+              , S (timeToString from)
+              , S "close"
+              , S (timeToString to)
+              ]
+          ]
+       )
+  &. mconcat &. A &. showTrie
+
+
+-- a:5:{s:6:"Monday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}s:7:"Tuesday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}s:9:"Wednesday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}s:8:"Thursday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}s:6:"Friday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}}

@@ -57,11 +57,13 @@ data Day = Monday
 data AmPm = Am | Pm deriving (Show, Eq, Ord)
 data Time = Time {hour :: Natural, minute :: Natural, ampm :: AmPm} deriving (Show, Eq, Ord)
 timeToString :: Time -> String
-timeToString (Time hour minute ampm) = pad (show hour) <> ":" <> pad (show minute) <> " " <> lower (show ampm)
+timeToString (Time hour minute ampm) = pad (show (hour + amPmToHour ampm)) <> ":" <> pad (show minute)
     where pad s
             | length s == 0 = "00"
             | length s == 1 = "0" <> s
             | otherwise     = s
+          amPmToHour Am = 0
+          amPmToHour Pm = 12
 data RangeDayAndTime = RangeDayAndTime (Either Day (Range Day)) (Range Time) deriving (Show,Eq,Ord)
 data PhoneNumber = PhoneNumber {countryCode :: String, areaCode :: String, number :: String, extension :: Maybe String} deriving (Show,Eq,Ord)
 data Url = Url {subnet :: String, urlAddress :: String, rest :: String} deriving (Show,Eq,Ord)
