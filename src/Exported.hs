@@ -67,8 +67,8 @@ eachDay l = l &> dayRangeToList
 data Trie = A [Trie] | S String
 
 showTrie :: Trie -> String
-showTrie (S s) = "s:" <> show (length s & toInteger) <> "\"" <> s <> "\";"
-showTrie (A a) = "a:" <> show (length a & toInteger) <> "{" <> (a &> showTrie & mconcat) <> "}"
+showTrie (S s) = "s:" <> show (length s & toInteger) <> ":\"" <> s <> "\";"
+showTrie (A a) = "a:" <> show (length a & toInteger & (`div` 2)) <> ":{" <> (a &> showTrie & mconcat) <> "}"
 
 daysToWeirdString :: [(Day, Range Time)] -> String
 daysToWeirdString =
