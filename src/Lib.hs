@@ -69,7 +69,7 @@ data PhoneNumber = PhoneNumber {countryCode :: String, areaCode :: String, numbe
 data Url = Url {subnet :: String, urlAddress :: String, rest :: String} deriving (Show,Eq,Ord)
 
 type Range a = (Min a, Max a)
-type AgeGroup = Maybe (Range Natural)
+type AgeGroup = Maybe [(Natural, Natural)]
 
 phoneToString :: PhoneNumber -> String
 phoneToString p = "(+"<>countryCode p<>") "
@@ -172,7 +172,7 @@ parseAgeGroup = divideUsual singularGroupParser
     where
         singularGroupParser :: Parser String AgeGroup
         singularGroupParser =
-            (\min max -> Just (Min min, Max max))
+            (\min max -> Just [(min, max)])
                 <$> digits <* spaces <* element '-' <* spaces
                 <*> digits <* spaces
             <|> elements "adult" <* optional (element 's') <* spaces *> pure Nothing

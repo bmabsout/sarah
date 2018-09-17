@@ -17,31 +17,44 @@ import qualified Data.Set as S
 infixl 1 =:
 (=:) = (,)
 
-titles :: [String]
-titles = rowContent ([],emptyRow) & M.keys
+titles :: S.Set String -> [String]
+titles allAdditionalNotes = rowContent allAdditionalNotes ([], emptyRow) & M.keys
 
-export = rowContent &. M.elems
+export allAdditionalNotes = rowContent allAdditionalNotes &. M.elems
 
-rowContent :: ([String], Row) -> M.Map String String
-rowContent (categories, row) =
+rowContent :: S.Set String -> ([String],  Row) -> M.Map String String
+rowContent allAdditionalNotes (categories, row) =
     ([ "title"          =: name
      , "content"        =: description
      , "categories"     =: const categories &. intersperse "|" &. mconcat
      , "subCategories"  =: subCategories &. intersperseAndCollide "|"
      , "facilities"     =: facilities &. intersperseAndCollide "|"
-     , "additionalNotes"=: additionalNotes &. intersperseAndCollide "|"
-     , "ages"           =: ageGroup &. (maybe "" (\(Min from, Max to) -> show from <> "-" <> show to))
+     , "ages"           =: ageGroup &. (maybe "" (fmap (\(from,to) -> show from <> "-" <> show to) &. intersperse "|" &. mconcat))
      , "address"        =: location &. address
      , "latitude"       =: location &. lat
      , "longitude"      =: location &. lon
      , "phone"          =: phoneNumbers &. (S.map phoneToString) &. intersperseAndCollide " / "
      , "email"          =: emails &. intersperseAndCollide " / "
-     , "price_status"   =: priceSymbol
-     , "business_hours" =: openingHoursAndDays &. S.toList &. eachDay &. daysToWeirdString
+     , "price_status"   =: priceSymbol &. priceSymbolToText 
+     , "business_hours" =: openingHoursAndDays &. S.toList &. eachDay &. daysToString
      ] &> (second ($ row))
     ) <> web2List (websites row & S.toList)
+      <> additionalNotesAsColumns allAdditionalNotes (additionalNotes row) 
     & M.fromList
   where intersperseAndCollide seperator = S.toList &. intersperse seperator &. mconcat
+
+additionalNotesAsColumns :: S.Set String -> S.Set String -> [(String,String)]
+additionalNotesAsColumns allAdditionalNotes additionalNotes =
+  allAdditionalNotes & S.toList &> (\el -> (el, if el `S.member` additionalNotes
+                                                then "yes"
+                                                else "no"))
+
+priceSymbolToText :: String -> String
+priceSymbolToText "$" = "inexpensive"
+priceSymbolToText "$$" = "moderate"
+priceSymbolToText "$$$" = "pricey"
+priceSymbolToText "$$$$" = "ultra high"
+priceSymbolToText otherwise = ""
 
 web2List :: [Url] -> [(String,String)]
 web2List urls = nameToUrl & M.toAscList &> second (filter (not.null) &. intersperse "\n" &. mconcat)
@@ -83,5 +96,10 @@ daysToWeirdString =
        )
   &. mconcat &. A &. showTrie
 
+
+daysToString :: [(Day, Range Time)] -> String
+daysToString =
+  fmap (\(day, (Min from, Max to)) -> show day <> "," <> timeToString from <> "," <> timeToString to)
+  &. intersperse "|" &. mconcat
 
 -- a:5:{s:6:"Monday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}s:7:"Tuesday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}s:9:"Wednesday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}s:8:"Thursday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}s:6:"Friday";a:2:{s:4:"open";s:5:"09:00";s:5:"close";s:5:"17:00";}}

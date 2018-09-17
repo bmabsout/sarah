@@ -53,7 +53,7 @@ main =
       mgr          -- manager
       "."          -- directory to watch
       (\case
-            Added p _ -> takeExtension p == ".xlsx" && (takeFileName p & isPrefixOf "~$" & not)
+            Added p _ False -> takeExtension p == ".xlsx" && (takeFileName p & isPrefixOf "~$" & not)
             otherwise -> False
       ) -- predicate
       (eventPath &. loadXlsx &. catchAny)        -- action
@@ -73,11 +73,12 @@ loadXlsx fp = do
   input    <- getWorksheets $ toXlsx bs
   allFilters <- readAllFilters
   let csvName = replaceExtension fp "csv"
-      filtersCombined :: Filters
       filtersCombined = allFilters
                         & M.elems
                         & mconcat
-                        &> toFuzzy
+      fuzzyFilters :: Filters
+      fuzzyFilters = filtersCombined &> toFuzzy
+      allAdditionalNotes = asIndex AdditionalNotes filtersCombined & S.fromList & S.delete ""
 
   input
     &> (\(worksheetTitle, worksheetContent) ->
@@ -87,14 +88,14 @@ loadXlsx fp = do
                             Nothing -> Left $ "Category "
                                        <> (unpack worksheetTitle & fromString)
                                        <> " is missing a corresponding folder in options"
-                            Just _ -> handleParseErrors filtersCombined ws worksheetTitle
+                            Just _ -> handleParseErrors fuzzyFilters ws worksheetTitle
        )
     & P.sequence & second P.concat
-    >>= duplicatesHandler
+    >>= duplicatesHandler allAdditionalNotes
     >>= wrongFiltersHandler (allFilters &>> S.fromList)
     & either putStrLn (\rows -> do
                           almostDuplicateWarnings (rows &> snd)
-                          writeCsv csvName (rows &> export)
+                          writeCsv allAdditionalNotes csvName (rows &> export allAdditionalNotes)
                        )
 
 type Cats = M.Map String (N.NonEmpty Int)
@@ -153,8 +154,8 @@ wrongFiltersHandler filterMap = fmap wrongFilterHandler &. P.sequence
 
 
 
-duplicatesHandler :: [(String,Int,Row)] -> Either String [(Cats, Row)]
-duplicatesHandler indexedRows =
+duplicatesHandler :: S.Set String -> [(String,Int,Row)] -> Either String [(Cats, Row)]
+duplicatesHandler allAdditionalNotes indexedRows =
     indexedRows
     &> duplicateHandler
     & msum
@@ -182,10 +183,10 @@ duplicatesHandler indexedRows =
                    <> "\nnamed: " <> name uniqueRow
 
           notSameRow =
-            let rowMap = rowContent ([],row)
-                uniqueRowMap = rowContent ([],uniqueRow)
+            let rowMap = rowContent allAdditionalNotes ([],row)
+                uniqueRowMap = rowContent allAdditionalNotes ([],uniqueRow)
             in
-              find (\title -> rowMap M.! title /= uniqueRowMap M.! title) titles
+              find (\title -> rowMap M.! title /= uniqueRowMap M.! title) (titles allAdditionalNotes)
               &> \title ->
                    "Wrong duplicate listing: "
                    <> show (currCat, currI)
@@ -226,10 +227,10 @@ handleParseErrors options cells title = eatParseErrors
               final (NotARow) = "Error: something's wrong with the row"
 
 
-writeCsv :: LString -> [[String]] -> IO ()
-writeCsv path cells = do
+writeCsv :: S.Set String -> LString -> [[String]] -> IO ()
+writeCsv allAdditionalNotes path cells = do
   putStrLn ("writing to " <> fromList path)
-  (titles : cells)
+  (titles allAdditionalNotes : cells)
     &>> (\s -> "\"" <> replace "\"" "\"\"" s <> "\"")
     &> (intersperse "," &. mconcat)
     & (intersperse "\n" &. mconcat)

@@ -1,6 +1,10 @@
+
+
 Parking
-Valet parking
-Accepts credit card
-Pet friendly
+Valet Parking
+Accepts Credit Card
+Pet Friendly
 Wifi
-Requires booking
+Requires Booking
+
+
