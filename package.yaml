@@ -42,6 +42,7 @@ dependencies:
 - generic-deriving
 - directory
 - linear
+- vinyl
 
 library:
   source-dirs: src

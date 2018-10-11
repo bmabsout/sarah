@@ -12,6 +12,7 @@ import Lib
 import Convenience
 import FeaturesHandler
 import Exported
+import qualified Images
 
 
 import qualified Data.ByteString.Lazy as L
@@ -72,6 +73,7 @@ loadXlsx fp = do
   bs       <- L.readFile fp
   input    <- getWorksheets $ toXlsx bs
   allFilters <- readAllFilters
+  imageMap <- Images.readAllImages
   let csvName = replaceExtension fp "csv"
       filtersCombined = allFilters
                         & M.elems
@@ -93,8 +95,10 @@ loadXlsx fp = do
     & P.sequence & second P.concat
     >>= duplicatesHandler allAdditionalNotes
     >>= wrongFiltersHandler (allFilters &>> S.fromList)
+    >>= subCategoriesHandler allFilters
+    >>= Images.wrongImagesHandler imageMap
     & either putStrLn (\rows -> do
-                          almostDuplicateWarnings (rows &> snd)
+                          almostDuplicateWarnings (rows &> (\(_,a,_) -> a))
                           writeCsv allAdditionalNotes csvName (rows &> export allAdditionalNotes)
                        )
 
@@ -120,6 +124,30 @@ almostDuplicateWarnings l =
 
   where names = l &> name & nub' &> (toList)
         fuzzied = names & BK.fromList
+
+
+invert :: (Ord k, Ord v) => M.Map k [v] -> M.Map v [k]
+invert m = M.fromListWith (<>) pairs
+    where pairs = [(v, [k]) | (k, vs) <- M.toList m, v <- vs]
+
+subCategoriesHandler :: M.Map String (V3 [String])
+                    -> [([String], Row)]
+                    -> Either String [([String], Row)]
+subCategoriesHandler filterMap rows =
+  rows &> second (\row -> row {subCategories = correctedSubCats row & S.fromList})
+       & pure
+  where
+    correctedSubCats :: Row -> [String]
+    correctedSubCats row =
+      subCategories row
+      & S.toList
+      &> (\sub -> (catPerSubCat M.! sub)
+                  &> (\cat -> cat <> ">" <> sub)
+         )
+      & mconcat
+
+    catPerSubCat :: M.Map String [String]
+    catPerSubCat = filterMap &> asIndex Subcategories & invert
 
 wrongFiltersHandler :: M.Map String (V3 (S.Set String))
                     -> [(Cats, Row)]
@@ -183,8 +211,8 @@ duplicatesHandler allAdditionalNotes indexedRows =
                    <> "\nnamed: " <> name uniqueRow
 
           notSameRow =
-            let rowMap = rowContent allAdditionalNotes ([],row)
-                uniqueRowMap = rowContent allAdditionalNotes ([],uniqueRow)
+            let rowMap = rowContent allAdditionalNotes ([],row,mempty)
+                uniqueRowMap = rowContent allAdditionalNotes ([],uniqueRow,mempty)
             in
               find (\title -> rowMap M.! title /= uniqueRowMap M.! title) (titles allAdditionalNotes)
               &> \title ->

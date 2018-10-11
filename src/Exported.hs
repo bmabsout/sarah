@@ -2,6 +2,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedLabels #-}
+
 
 module Exported(export, titles, rowContent) where
 
@@ -13,17 +15,19 @@ import Data.Semigroup hiding ((<>))
 import Convenience
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Images
+import Images(Images)
 
 infixl 1 =:
 (=:) = (,)
 
 titles :: S.Set String -> [String]
-titles allAdditionalNotes = rowContent allAdditionalNotes ([], emptyRow) & M.keys
+titles allAdditionalNotes = rowContent allAdditionalNotes ([], emptyRow, mempty) & M.keys
 
 export allAdditionalNotes = rowContent allAdditionalNotes &. M.elems
 
-rowContent :: S.Set String -> ([String],  Row) -> M.Map String String
-rowContent allAdditionalNotes (categories, row) =
+rowContent :: S.Set String -> ([String],  Row, Images) -> M.Map String String
+rowContent allAdditionalNotes (categories, row, images) =
     ([ "title"          =: name
      , "content"        =: description
      , "categories"     =: const categories &. intersperse "|" &. mconcat
@@ -39,7 +43,11 @@ rowContent allAdditionalNotes (categories, row) =
      , "business_hours" =: openingHoursAndDays &. S.toList &. eachDay &. daysToString
      ] &> (second ($ row))
     ) <> web2List (websites row & S.toList)
-      <> additionalNotesAsColumns allAdditionalNotes (additionalNotes row) 
+      <> additionalNotesAsColumns allAdditionalNotes (additionalNotes row)
+      <> [ "featured image"   =: Images.featured images
+         , "background image" =: Images.background images
+         , "gallery"          =: (Images.gallery images & intersperse "," & mconcat)
+         ] 
     & M.fromList
   where intersperseAndCollide seperator = S.toList &. intersperse seperator &. mconcat
 
