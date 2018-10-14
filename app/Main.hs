@@ -16,6 +16,7 @@ import qualified Images
 
 
 import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString as SByteString
 import Data.Maybe (fromMaybe)
 import Control.Monad (forever, msum, guard)
 import Data.Function ((&))
@@ -26,6 +27,7 @@ import qualified Data.Set as S
 import qualified Data.Semigroup as Semigroup
 import System.Console.ANSI(clearScreen)
 import Codec.Xlsx
+import qualified Data.List as List
 import qualified Data.List.NonEmpty as N
 import Foundation
 import Foundation.String
@@ -57,7 +59,7 @@ main =
             Added p _ False -> takeExtension p == ".xlsx" && (takeFileName p & isPrefixOf "~$" & not)
             otherwise -> False
       ) -- predicate
-      (eventPath &. loadXlsx &. catchAny)        -- action
+      (eventPath &. readXlsx &. catchAny)        -- action
 
     -- sleep forever (until interrupted)
     forever $ threadDelay 10000000
@@ -67,11 +69,16 @@ print = show &. putStrLn
 
 for = flip fmap
 
-loadXlsx :: FilePath -> IO ()
-loadXlsx fp = do
+readXlsx :: FilePath -> IO ()
+readXlsx fp = do
   clearScreen
-  bs       <- L.readFile fp
-  input    <- getWorksheets $ toXlsx bs
+  bs <- Control.Exception.try @SomeException $ SByteString.readFile fp
+  case bs of
+    Left e -> putStrLn (show e) 
+    Right bs -> loadXlsx fp bs
+
+loadXlsx fp bs = do
+  input    <- getWorksheets $! toXlsx (L.fromStrict bs)
   allFilters <- readAllFilters
   imageMap <- Images.readAllImages
   let csvName = replaceExtension fp "csv"
@@ -134,14 +141,14 @@ subCategoriesHandler :: M.Map String (V3 [String])
                     -> [([String], Row)]
                     -> Either String [([String], Row)]
 subCategoriesHandler filterMap rows =
-  rows &> second (\row -> row {subCategories = correctedSubCats row & S.fromList})
+  rows &> (\(cats,row) -> (cats, row {subCategories = correctedSubCats cats row & S.fromList}))
        & pure
   where
-    correctedSubCats :: Row -> [String]
-    correctedSubCats row =
+    correctedSubCats :: [String] -> Row -> [String]
+    correctedSubCats cats row =
       subCategories row
       & S.toList
-      &> (\sub -> (catPerSubCat M.! sub)
+      &> (\sub -> ((catPerSubCat M.! sub) `List.intersect` cats)
                   &> (\cat -> cat <> ">" <> sub)
          )
       & mconcat
